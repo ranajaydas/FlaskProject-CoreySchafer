@@ -1,8 +1,8 @@
 from flask import render_template, url_for, flash, redirect, request
+from flask_login import login_user, current_user, logout_user, login_required
 from flaskblog.forms import RegistrationForm, LoginForm           # user created module and classes
 from flaskblog.models import User, Post                           # user created module and classes
 from flaskblog import app, bcrypt, db                             # user created module and classes
-from flask_login import login_user, current_user, logout_user, login_required
 
 
 posts = [
@@ -38,6 +38,7 @@ def about():
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('home'))
+
     form = RegistrationForm()
     if form.validate_on_submit():
         hashed_password = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
@@ -47,7 +48,7 @@ def register():
         db.session.add(user)
         db.session.commit()
 
-        flash('Your account has been created! You can now login', 'success')
+        flash('Your account has been created! You can now login.', 'success')
         return redirect(url_for('login'))
     return render_template('register.html',
                            title='Register',
@@ -58,6 +59,7 @@ def register():
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('home'))
+
     form = LoginForm()
     if form.validate_on_submit():
         user = User.query.filter_by(email=form.email.data).first()

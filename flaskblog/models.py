@@ -1,6 +1,6 @@
 from datetime import datetime
-from flaskblog import db, login_manager                     # user created module and classes
 from flask_login import UserMixin
+from flaskblog import db, login_manager                     # user created module and classes
 
 
 @login_manager.user_loader
