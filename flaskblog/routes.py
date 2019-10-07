@@ -1,32 +1,18 @@
 import secrets
 import os
 from PIL import Image
-from flask import render_template, url_for, flash, redirect, request
+from flask import render_template, url_for, flash, redirect, request, abort
 from flask_login import login_user, current_user, logout_user, login_required
-from flaskblog.forms import RegistrationForm, LoginForm, UpdateAccountForm
+from flaskblog.forms import RegistrationForm, LoginForm, UpdateAccountForm, PostForm
 from flaskblog.models import User, Post
 from flaskblog import app, bcrypt, db
-
-
-posts = [
-    {
-        'author': 'Ranajay Das',
-        'title': 'My First Post!',
-        'content': 'Hello everyone! This is Jojo! BlahBlahBlah...',
-        'date_posted': 'Oct 04, 2019'
-    },
-    {
-        'author': 'Choot Pakoda',
-        'title': 'Buy My Book!',
-        'content': 'Arrey...mera book khareedo yaar!',
-        'date_posted': 'Oct 24, 2029'
-    }
-]
 
 
 @app.route('/')
 @app.route('/home')
 def home():
+    page = request.args.get('page', 1, type=int)  # To use /?page=<page number>
+    posts = Post.query.order_by(Post.date_posted.desc()).paginate(page=page, per_page=5)
     return render_template('home.html',
                            posts=posts)
 
@@ -86,6 +72,7 @@ def logout():
 
 
 def save_picture(form_picture) -> str:
+    """Saves the user's profile image and returns the filename."""
     random_hex = secrets.token_hex(8)
     _, f_ext = os.path.splitext(form_picture.filename)
     picture_fn = random_hex + f_ext
@@ -111,7 +98,7 @@ def account():
         current_user.email = form.email.data
         db.session.commit()
         flash('Your account has been updated!', 'success')
-        return redirect(url_for('account'))                     # To prevent POST/GET redirect pattern
+        return redirect(url_for('account'))  # To prevent POST/GET redirect pattern
     elif request.method == 'GET':
         form.username.data = current_user.username
         form.email.data = current_user.email
@@ -120,3 +107,73 @@ def account():
                            title='Account',
                            image_file=image_file,
                            form=form)
+
+
+@app.route('/post/new', methods=['GET', 'POST'])
+@login_required
+def new_post():
+    form = PostForm()
+    if form.validate_on_submit():
+        post = Post(title=form.title.data, content=form.content.data, author=current_user)
+        db.session.add(post)
+        db.session.commit()
+        flash('Your post has been created!', 'success')
+        return redirect(url_for('home'))
+    return render_template('create_post.html',
+                           title='New Post',
+                           form=form,
+                           legend='New Post')
+
+
+@app.route('/post/<int:post_id>')
+def post(post_id):
+    post = Post.query.get_or_404(post_id)
+    return render_template('post.html',
+                           title=post.title,
+                           post=post)
+
+
+@app.route('/post/<int:post_id>/update', methods=['GET', 'POST'])
+@login_required
+def update_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    if post.author != current_user:
+        abort(403)
+    form = PostForm()
+    if form.validate_on_submit():
+        post.title = form.title.data
+        post.content = form.content.data
+        db.session.commit()
+        flash('Your post has been updated!', 'success')
+        return redirect(url_for('post', post_id=post.id))
+    elif request.method == 'GET':
+        form.title.data = post.title
+        form.content.data = post.content
+    return render_template('create_post.html',
+                           title='Update Post',
+                           form=form,
+                           legend='Update Post')
+
+
+@app.route('/post/<int:post_id>/delete', methods=['POST'])
+@login_required
+def delete_post(post_id):
+    post = Post.query.get_or_404(post_id)
+    if post.author != current_user:
+        abort(403)
+    db.session.delete(post)
+    db.session.commit()
+    flash('Your post has been deleted!', 'success')
+    return redirect(url_for('home'))
+
+
+@app.route('/user/<string:username>')
+def user_posts(username):
+    user = User.query.filter_by(username=username).first_or_404()
+    page = request.args.get('page', 1, type=int)
+    posts = Post.query.filter_by(author=user)\
+                .order_by(Post.date_posted.desc())\
+                .paginate(page=page, per_page=5)
+    return render_template('user_posts.html',
+                           posts=posts,
+                           user=user)
